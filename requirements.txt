@@ -1,0 +1,13 @@
+pandas
+numpy
+scikit-learn
+scipy
+transformers
+xgboost
+matplotlib
+seaborn
+tqdm
+joblib
+streamlit==1.44.1
+pytest
+cupy-cuda12x
