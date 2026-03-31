@@ -1,108 +1,221 @@
-# SDP Using CIFPD
+# Software Defect Prediction Using CIFPD
 
-This project refactors the original `SDP_using_CIFPD.ipynb` notebook into a repeatable training, testing, and inference workflow.
+## Abstract
 
-## What changed
+Software defect prediction helps identify issue reports that are likely to correspond to defective software behavior. This project builds a defect prediction system using issue-report data and a hybrid modeling pipeline that combines transformer-based language representations with machine learning classification.
 
-- The original notebook logic is preserved, but moved into reusable Python code in [`src/sdp_pipeline.py`](/home/jasir/sdp/src/sdp_pipeline.py).
-- A testing phase is now part of the project:
-  - holdout evaluation with saved metrics
-  - cross-validation summary
-  - saved confusion matrix and ROC curve plots
-  - lightweight unit tests for core preprocessing logic
-- A Streamlit UI is available in [`app.py`](/home/jasir/sdp/app.py) to run the trained model on new inputs.
-- The refactored training flow explicitly removes `rs` from candidate features because `defective` is created from `rs`. Keeping `rs` as an input would leak the target into the model.
+The approach uses `RoBERTa` to convert issue text and selected report attributes into dense semantic embeddings, then applies `XGBoost` to classify each issue as defective or non-defective. The project also includes evaluation, saved training artifacts, and a Streamlit-based user interface for interactive prediction.
 
-## Project structure
+## Objective
 
-- [`SDP_using_CIFPD.ipynb`](/home/jasir/sdp/SDP_using_CIFPD.ipynb): original notebook
-- [`src/sdp_pipeline.py`](/home/jasir/sdp/src/sdp_pipeline.py): shared training and inference pipeline
-- [`train_model.py`](/home/jasir/sdp/train_model.py): model training entry point
-- [`evaluate_model.py`](/home/jasir/sdp/evaluate_model.py): print saved evaluation summary
-- [`check_gpu.py`](/home/jasir/sdp/check_gpu.py): confirm whether PyTorch can see CUDA
-- [`app.py`](/home/jasir/sdp/app.py): Streamlit UI for inference
-- [`tests/test_sdp_pipeline.py`](/home/jasir/sdp/tests/test_sdp_pipeline.py): smoke tests for preprocessing logic
+The main objective of this project is to predict whether a software issue is defective based on the information available in issue reports. The system is designed to support:
 
-## Training
+- automated defect prediction from issue data
+- repeatable model training and evaluation
+- interactive prediction through a user interface
+- export of prediction history for a user session
 
-Install dependencies:
+## Project Workflow
 
-```bash
+The end-to-end workflow of the project is:
+
+1. Load the issue dataset from CSV.
+2. Clean required fields and prepare the dataset.
+3. Create the target label `defective` from the resolution status.
+4. Rank candidate feature groups and select the most useful report attributes.
+5. Combine selected fields into a single text representation called `intent_text`.
+6. Generate text embeddings using `roberta-base`.
+7. Train an `XGBoost` classifier on the generated embeddings.
+8. Evaluate the trained model using holdout metrics and cross-validation.
+9. Save trained artifacts, metadata, and evaluation reports.
+10. Serve predictions through a Streamlit web interface.
+
+## Methodology
+
+### 1. Data Preparation
+
+The dataset is read from a CSV file. Required columns are validated, missing values are handled, and duplicate records are removed where necessary.
+
+### 2. Target Construction
+
+The project creates the target variable `defective` internally from the issue resolution status:
+
+- `FIXED` -> `1`
+- all other values -> `0`
+
+### 3. Feature Selection
+
+Feature ranking is performed using multiple statistical and model-based techniques, including:
+
+- Mutual Information
+- Chi-Square
+- Cramer's V
+- Random Forest feature importance
+
+The selected top columns are used to construct the final textual representation for modeling.
+
+### 4. Embedding Generation
+
+The selected fields are combined into `intent_text`, which is then passed to `RoBERTa`. The transformer model generates vector embeddings that capture the semantic meaning of the issue report.
+
+### 5. Classification
+
+The generated embeddings are used as input to `XGBoost`, which performs the final classification task.
+
+### 6. Evaluation
+
+The model is evaluated using standard classification metrics, including:
+
+- Accuracy
+- Precision
+- Recall
+- F1-score
+- Balanced Accuracy
+- ROC-AUC
+- Log Loss
+- Brier Score
+- Confusion Matrix
+
+## Technologies Used
+
+- Python
+- Pandas
+- NumPy
+- Scikit-learn
+- Transformers
+- PyTorch
+- XGBoost
+- Matplotlib
+- Seaborn
+- Streamlit
+
+## Project Structure
+
+```text
+.
+|-- app.py
+|-- check_gpu.py
+|-- evaluate_model.py
+|-- requirements.txt
+|-- train_model.py
+|-- README.md
+|-- SDP_using_CIFPD.ipynb
+|-- SDP_using_CIFPD_modified.ipynb
+|-- src/
+|   |-- __init__.py
+|   `-- sdp_pipeline.py
+`-- tests/
+    `-- test_sdp_pipeline.py
+```
+
+## Input Requirements
+
+The dataset should be available as a CSV file and must include at least the following columns:
+
+- `rs`
+- `sd`
+
+Additional issue attributes may also be used by the feature selection and training pipeline.
+
+## Installation
+
+### Create and activate a virtual environment
+
+On Windows:
+
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\activate
+python -m pip install --upgrade pip setuptools wheel
+```
+
+### Install CUDA-enabled PyTorch
+
+```powershell
+pip uninstall -y torch torchvision torchaudio
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+```
+
+### Install project dependencies
+
+```powershell
 pip install -r requirements.txt
 ```
 
-If you want GPU-enabled PyTorch, install a CUDA wheel instead of the CPU-only default. On March 31, 2026, PyTorch's official install page shows CUDA-specific pip wheels for Linux, including a `cu118` example:
+### Verify GPU setup
 
-```bash
-pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+```powershell
+python check_gpu.py
 ```
 
-Pick the CUDA build that matches your NVIDIA driver support from the official PyTorch selector:
+## Training
 
-- https://pytorch.org/get-started/locally/
+Run model training from the project root:
 
-After installation, verify GPU visibility:
-
-```bash
-python3 check_gpu.py
+```powershell
+python train_model.py --csv Eclipse.csv --artifacts models --reports reports
 ```
 
-Train the model:
+## Evaluation
 
-```bash
-python3 train_model.py --csv /path/to/Eclipse.csv --artifacts models --reports reports
+To print the saved evaluation summary:
+
+```powershell
+python evaluate_model.py --artifacts models
 ```
 
-Training writes:
+## Running the Application
+
+Start the Streamlit user interface:
+
+```powershell
+streamlit run app.py --server.fileWatcherType none
+```
+
+The application allows the user to:
+
+- enter issue report details
+- generate a defect prediction
+- view the prediction probability
+- review session prediction history
+- export session predictions as CSV
+
+## Output Artifacts
+
+After training, the following outputs are generated:
+
+### Model artifacts
 
 - `models/classifier.joblib`
 - `models/metadata.json`
+
+### Evaluation reports
+
 - `reports/confusion_matrix.png`
 - `reports/roc_curve.png`
-- `reports/*_feature_ranking.csv`
+- feature-ranking CSV files
 
-## Testing phase
+## Testing
 
-1. Unit tests:
+Run unit tests using:
 
-```bash
-pytest -q
+```powershell
+python -m pytest -q
 ```
 
-2. Review saved evaluation:
+## Applications
 
-```bash
-python3 evaluate_model.py --artifacts models
-```
+This project can be useful for:
 
-3. Inspect charts in `reports/`.
+- defect triage support
+- software quality analysis
+- issue prioritization workflows
+- research in software analytics and defect prediction
 
-## Run the UI
+## Future Scope
 
-```bash
-streamlit run app.py
-```
-
-The UI reads the selected feature columns from `models/metadata.json`, so it automatically matches the trained model.
-
-## GPU notes
-
-- RoBERTa embeddings use CUDA automatically when `torch.cuda.is_available()` is `True`.
-- XGBoost now uses `device="cuda"` automatically when CUDA is available, and the pipeline can keep the embedding matrix on GPU when `cupy-cuda12x` is installed.
-- You can force XGBoost device selection with `SDP_XGB_DEVICE`, for example:
-
-```bash
-SDP_XGB_DEVICE=cpu python3 train_model.py --csv /path/to/Eclipse.csv
-```
-
-Official references:
-
-- PyTorch install selector: https://pytorch.org/get-started/locally/
-- XGBoost GPU support: https://xgboost.readthedocs.io/en/stable/gpu/
-- XGBoost recommends GPU data structures with `device="cuda"` and `QuantileDMatrix`-backed training for best GPU execution: https://xgboost.readthedocs.io/en/stable/gpu/
-
-## Recommended next improvements
-
-- Replace the current label definition if you want true defect prediction earlier in the lifecycle. Deriving the label from resolution status is convenient, but it limits how realistic the prediction task is.
-- Add a separate validation dataset from another project or time period. A single random split can still overestimate generalization.
-- If training time becomes an issue, cache embeddings to disk so you do not recompute RoBERTa vectors on every run.
+- improve repeated UI interaction stability
+- expand field labeling with domain-specific names
+- add threshold calibration and explainability support
+- validate on additional datasets and cross-project scenarios
+- deploy as an API-backed application
